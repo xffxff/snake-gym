@@ -45,6 +45,7 @@ class SnakeEnv(gym.Env):
         self.snake_start = (10, 10)
 
         self.action_space = spaces.Discrete(4)
+        self.observation_space = spaces.Box(low=0, high=255, shape=(400, 400, 3), dtype=np.uint8)
 
         self.snake = deque()
         self.snake_head = None
@@ -52,6 +53,7 @@ class SnakeEnv(gym.Env):
         self.prev_action = None
         self.food = None
         self.viewer = None
+        self.np_random = np.random
 
     def reset(self):
         self.prev_action = SnakeAction.UP
