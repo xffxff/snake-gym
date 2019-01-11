@@ -6,8 +6,6 @@ import numpy as np
 from collections import deque
 from gym.envs.classic_control import rendering
 
-from board import Board
-
 class SnakeAction(object):
     LEFT = 0
     RIGHT = 1
@@ -157,3 +155,14 @@ class SnakeEnv(gym.Env):
             self.viewer = rendering.SimpleImageViewer()
         self.viewer.imshow(img)
         return self.viewer.isopen
+
+
+class Board(object):
+
+    def __init__(self, height, weight):
+        self.board = np.empty((height, weight, 3), dtype=np.uint8)
+        self.board[:, :, :] = BoardColor.SPACE_COLOR
+
+    def fill_cell(self, vertex, cell_size, color):
+        x, y = vertex
+        self.board[x:x+cell_size, y:y+cell_size, :] = color
