@@ -4,7 +4,7 @@ from gym import spaces, logger
 from gym.utils import seeding
 import numpy as np
 from collections import deque
-from gym.envs.classic_control import rendering
+
 
 class SnakeAction(object):
     LEFT = 0
@@ -153,10 +153,14 @@ class SnakeEnv(gym.Env):
 
     def render(self, mode='human'):
         img = self.get_image()
-        if self.viewer is None:
-            self.viewer = rendering.SimpleImageViewer()
-        self.viewer.imshow(img)
-        return self.viewer.isopen
+        if mode == 'rgb_array':
+            return img
+        elif mode == 'human':
+            if self.viewer is None:
+                from gym.envs.classic_control import rendering
+                self.viewer = rendering.SimpleImageViewer()
+            self.viewer.imshow(img)
+            return self.viewer.isopen
 
 
 class Board(object):
