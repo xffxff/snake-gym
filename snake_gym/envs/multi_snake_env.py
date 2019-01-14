@@ -22,7 +22,7 @@ class BoardColor(object):
     SPACE_COLOR = np.array([255,255,255], dtype=np.uint8)
 
 
-class SnakeEnv(gym.Env):
+class MultiSnakeEnv(gym.Env):
 
     metadata = {
         'render.modes': ['human', 'rgb_array'],
