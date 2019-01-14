@@ -4,7 +4,7 @@ register(
     id='Snake-v0',
     entry_point='snake_gym.envs:SnakeEnv',
 )
-# register(
-#     id='foo-extrahard-v0',
-#     entry_point='gym_foo.envs:FooExtraHardEnv',
-# )
+register(
+    id='MultiSnake-v0',
+    entry_point='snake_gym.envs:MultiSnakeEnv',
+)
