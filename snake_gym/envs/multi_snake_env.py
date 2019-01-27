@@ -1,5 +1,4 @@
 
-
 import gym
 from gym import spaces, logger
 from gym.utils import seeding
@@ -14,12 +13,15 @@ class SnakeAction(object):
     UP = 2
     DOWN = 3
 
-class BoardColor(object):
-    BODY_COLOR = np.array([0, 0, 0], dtype=np.uint8)
-    HEAD1_COLOR = np.array([255, 0, 0], dtype=np.uint8)
-    HEAD2_COLOR = np.array([0, 0, 255], dtype=np.uint8)
-    FOOD_COLOR = np.array([0, 255, 0], dtype=np.uint8)
-    SPACE_COLOR = np.array([255,255,255], dtype=np.uint8)
+
+FOOD_COLOR = np.array([0, 255, 0], dtype=np.uint8)
+SPACE_COLOR = np.array([255,255,255], dtype=np.uint8)
+
+SNAKE_COLOR = [np.array([255, 0, 0], dtype=np.uint8), \
+               np.array([0, 0, 255], dtype=np.uint8), \
+               np.array([255, 255, 0], dtype=np.uint8), \
+               np.array([0, 255, 255], dtype=np.uint8), \
+               np.array([255, 0, 255], dtype=np.uint8)]
 
 
 class MultiSnakeEnv(gym.Env):
@@ -29,29 +31,24 @@ class MultiSnakeEnv(gym.Env):
         # 'video.frames_per_second' : 50
     }
 
-    def __init__(self):
+    def __init__(self, n_snakes):
         self.width = 20
         self.hight = 20
 
-        self.action_space = spaces.Box(low=0, high=3, shape=(2, ), dtype=np.int32)
+        self.action_space = spaces.Box(low=0, high=3, shape=(n_snakes, ), dtype=np.int32)
         self.observation_space = spaces.Box(low=0, high=255, shape=(400, 400, 3), dtype=np.uint8)
 
-        self.snake1 = None
-        self.snake2 = None
-        self.snakes = []
-        self.snake1_prev_act = None
-        self.snake2_prev_act = None
-        self.food = None
+        self.n_snakes = n_snakes
+        self.snakes = [Snake(i) for i in range(n_snakes)]
+        self.foods = []
         self.viewer = None
         self.np_random = np.random
 
     def reset(self):
-        self.snake1 = self.snake_rebirth()
-        self.snakes.append(self.snake1)
-        self.snake2 = self.snake_rebirth()
-        self.snakes.append(self.snake2)
         empty_cells = self.get_empty_cells()
-        self.food = empty_cells[self.np_random.choice(len(empty_cells))]
+        for i in range(self.n_snakes):
+            empty_cells = self.snakes[i].reset(empty_cells, self.np_random)
+        self.foods = [empty_cells[i] for i in self.np_random.choice(len(empty_cells), 3)]
         return self.get_image()
 
     def snake_rebirth(self):
@@ -66,79 +63,46 @@ class MultiSnakeEnv(gym.Env):
 
     def step(self, action):
         # assert self.action_space.contains(action), "%r (%s) invalid" % (action, type(action))
-
-        snake1_action, snake2_action = action
-        if not self.is_valid_action(self.snake1, self.snake1_prev_act, snake1_action):
-            snake1_action = self.snake1_prev_act
-        if not self.is_valid_action(self.snake2, self.snake2_prev_act, snake2_action):
-            snake2_action = self.snake2_prev_act
-        self.snake1_prev_act = snake1_action
-        self.snake2_prev_act = snake2_action
-
-        snake1_tail = self.snake1.step(snake1_action)
-        snake2_tail = self.snake2.step(snake2_action)
-
-        reward1, reward2 = 0., 0.
-        done1, done2 = False, False
-        #Two snakes collided together
-        if self.snake1.head == self.snake2.head:
-            reward1 -= len(self.snake1.snake) 
-            reward2 -= len(self.snake2.snake)
-            done1, done2 = True, True
-            self.reset()
+        for i in range(self.n_snakes):
+            self.snakes[i].step(action[i])
         
-        #snake1 collided snake2
-        if self.snake1.head in self.snake2.body:
-            reward1 -= len(self.snake1.snake)
-            reward2 += len(self.snake1.snake)
-            done1 = True
-            done2 = False
-            self.snake1 = self.snake_rebirth()
-        
-        #snake2 collided snake1
-        if self.snake2.head in self.snake1.body:
-            reward1 += len(self.snake2.snake)
-            reward2 -= len(self.snake2.snake)
-            done1 = False
-            done2 = True
-            self.snake2 = self.snake_rebirth()
-
-        if self.snake1.head != self.snake2.head:
-            if self.snake1.head == self.food:
-                reward1 += 1.
-                self.snake1.snake.append(snake1_tail)
+        for snake in self.snakes:
+            if snake.head in self.foods:
+                snake.reward += 1.
+                snake.grow()
                 empty_cells = self.get_empty_cells()
-                self.food = empty_cells[self.np_random.choice(len(empty_cells))]
-            if self.snake2.head == self.food:
-                reward2 += 1
-                self.snake2.snake.append(snake2_tail)
+                self.foods.remove(snake.head)
+                if len(self.foods) < 10:
+                    food = empty_cells[self.np_random.choice(len(empty_cells))]
+                    self.foods.append(food) 
+
+            if self.bite_others_or_itself(snake) or self.is_collided_wall(snake.head):
+                snake.reward -= len(snake.body)
+                snake.done = True
+                self.foods.extend(list(snake.body)[1:])
+                self.foods.append(snake.tail)
+        
+        rewards = []
+        dones = []
+        for snake in self.snakes:
+            rewards.append(snake.reward)
+            dones.append(snake.done)
+            snake.reward = 0.
+            if snake.done:
                 empty_cells = self.get_empty_cells()
-                self.food = empty_cells[self.np_random.choice(len(empty_cells))]
+                snake.reset(empty_cells, self.np_random)
         
-        #two snakes collided wall at the same time
-        if self.is_collided_wall(self.snake1.head) and self.is_collided_wall(self.snake2.head):
-            reward1 -= len(self.snake1.snake)
-            reward2 -= len(self.snake2.snake)
-            done1 = True
-            done2 = True
-            self.snake1 = self.snake_rebirth()
-            self.snake2 = self.snake_rebirth()
+        return self.get_image(), rewards, dones, {}
 
-        #snake1 collided wall
-        elif self.is_collided_wall(self.snake1.head):
-            reward1 -= len(self.snake1.snake)
-            reward2 += len(self.snake1.snake)
-            done1 = True
-            self.snake1 = self.snake_rebirth()
-        
-        #snake2 collided wall
-        elif self.is_collided_wall(self.snake2.head):
-            reward1 += len(self.snake2.snake)
-            reward2 -= len(self.snake2.snake)
-            done2 = True
-            self.snake2 = self.snake_rebirth()
+    def bite_others_or_itself(self, this_snake):
+        snakes = self.snakes.copy()
+        other_snakes = snakes.remove(this_snake)
+        all_body_cells = []
+        for snake in snakes:
+            all_body_cells.extend(list(snake.body))
+        all_body_cells.extend(list(this_snake.body)[1:])
+        return this_snake.head in all_body_cells
 
-        return self.get_image(), [reward1, reward2], [done1, done2], {}
 
     def get_image(self):
         board_width = 400
@@ -146,43 +110,25 @@ class MultiSnakeEnv(gym.Env):
         cell_size = int(board_width / self.width)
 
         board = Board(board_height, board_width)
-        for x, y in self.snake1.body:
-            board.fill_cell((x*cell_size, y*cell_size), cell_size, BoardColor.BODY_COLOR)
-
-        for x, y in self.snake2.body:
-            board.fill_cell((x*cell_size, y*cell_size), cell_size, BoardColor.BODY_COLOR)
-
-        x, y = self.snake1.head
-        board.fill_cell((x*cell_size, y*cell_size), cell_size, color=BoardColor.HEAD1_COLOR)
-
-        x, y = self.snake2.head
-        board.fill_cell((x*cell_size, y*cell_size), cell_size, color=BoardColor.HEAD2_COLOR)
+        for snake in self.snakes:
+            for x, y in snake.body:
+                board.fill_cell((x*cell_size, y*cell_size), cell_size, snake.color)
         
-        if self.food:
-            x, y = self.food
-            board.fill_cell((x*cell_size, y*cell_size), cell_size, BoardColor.FOOD_COLOR)
+        for food in self.foods:
+            x, y = food
+            board.fill_cell((x*cell_size, y*cell_size), cell_size, FOOD_COLOR)
         return board.board
 
     def get_empty_cells(self):
         empty_cells = [(x, y) for x in range(self.width) for y in range(self.hight)]
         for snake in self.snakes:
-            for cell in snake.snake:
+            for cell in snake.body:
                 if cell in empty_cells:
                     empty_cells.remove(cell)
-        if self.food in empty_cells:
-            empty_cells.remove(self.food)
+        for food in self.foods:
+            if self.foods in empty_cells:
+                empty_cells.remove(self.foods)
         return empty_cells
-
-    def is_valid_action(self, snake, prev_action, action):
-        if len(snake.snake) == 1:
-            return True
-        
-        horizontal_actions = [SnakeAction.LEFT, SnakeAction.RIGHT]
-        vertical_actions = [SnakeAction.UP, SnakeAction.DOWN]
-
-        if prev_action in horizontal_actions:
-            return action in vertical_actions
-        return action in horizontal_actions
 
     def is_collided_wall(self, head):
         x, y = head
@@ -204,32 +150,53 @@ class MultiSnakeEnv(gym.Env):
 
 class Snake(object):
 
-    def __init__(self):
-        self.snake = deque()
+    def __init__(self, i):
+        self.body = deque()
+        self.color = SNAKE_COLOR[i]
+        self.prev_action = None
+        self.tail = None
+        self.reward = 0.
+        self.done = False
         
     def step(self, action):
+        if not self.is_valid_action(action):
+            action = self.prev_action
+        self.prev_action = action
         x, y = self.head
         if action == SnakeAction.LEFT:
-            self.snake.appendleft((x, y - 1))
+            self.body.appendleft((x, y - 1))
         if action == SnakeAction.RIGHT:
-            self.snake.appendleft((x, y + 1))
+            self.body.appendleft((x, y + 1))
         if action == SnakeAction.UP:
-            self.snake.appendleft((x - 1, y))
+            self.body.appendleft((x - 1, y))
         if action == SnakeAction.DOWN:
-            self.snake.appendleft((x + 1, y))
-        return self.snake.pop()
+            self.body.appendleft((x + 1, y))
+        self.tail = self.body.pop()
+    
+    def grow(self):
+        self.body.append(self.tail)
 
     @property
     def head(self):
-        return self.snake[0]
+        return self.body[0]
 
-    @property
-    def body(self):
-        return list(self.snake)[1:]
+    def is_valid_action(self, action):
+        if len(self.body) == 1:
+            return True
+        
+        horizontal_actions = [SnakeAction.LEFT, SnakeAction.RIGHT]
+        vertical_actions = [SnakeAction.UP, SnakeAction.DOWN]
+
+        if self.prev_action in horizontal_actions:
+            return action in vertical_actions
+        return action in horizontal_actions
     
-    def init(self, empty_cells, np_random):
+    def reset(self, empty_cells, np_random):
+        self.reward = 0.
+        self.done = False
+        self.body.clear()
         start_head = empty_cells[np_random.choice(len(empty_cells))]
-        self.snake.appendleft(start_head)
+        self.body.appendleft(start_head)
         empty_cells.remove(start_head)
         return empty_cells
 
@@ -238,8 +205,9 @@ class Board(object):
 
     def __init__(self, height, weight):
         self.board = np.empty((height, weight, 3), dtype=np.uint8)
-        self.board[:, :, :] = BoardColor.SPACE_COLOR
+        self.board[:, :, :] = SPACE_COLOR
 
     def fill_cell(self, vertex, cell_size, color):
         x, y = vertex
         self.board[x:x+cell_size, y:y+cell_size, :] = color
+
