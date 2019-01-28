@@ -43,6 +43,7 @@ class MultiSnakeEnv(gym.Env):
         self.foods = []
         self.viewer = None
         self.np_random = np.random
+        self.game_over = False
 
     def reset(self):
         empty_cells = self.get_empty_cells()
@@ -50,12 +51,6 @@ class MultiSnakeEnv(gym.Env):
             empty_cells = self.snakes[i].reset(empty_cells, self.np_random)
         self.foods = [empty_cells[i] for i in self.np_random.choice(len(empty_cells), 3)]
         return self.get_image()
-
-    def snake_rebirth(self):
-        snake = Snake()
-        empty_cells = self.get_empty_cells()
-        empty_cells = snake.init(empty_cells, self.np_random)
-        return snake
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
@@ -70,8 +65,8 @@ class MultiSnakeEnv(gym.Env):
             if snake.head in self.foods:
                 snake.reward += 1.
                 snake.grow()
-                empty_cells = self.get_empty_cells()
                 self.foods.remove(snake.head)
+                empty_cells = self.get_empty_cells()
                 if len(self.foods) < 10:
                     food = empty_cells[self.np_random.choice(len(empty_cells))]
                     self.foods.append(food) 
@@ -89,10 +84,12 @@ class MultiSnakeEnv(gym.Env):
             dones.append(snake.done)
             snake.reward = 0.
             if snake.done:
-                empty_cells = self.get_empty_cells()
-                snake.reset(empty_cells, self.np_random)
+                self.snakes.remove(snake)
+                self.n_snakes -= 1
         
-        return self.get_image(), rewards, dones, {}
+        if self.n_snakes == 0:
+            self.game_over = True
+        return self.get_image(), rewards, dones, {'game_over': self.game_over}
 
     def bite_others_or_itself(self, this_snake):
         snakes = self.snakes.copy()
@@ -126,8 +123,8 @@ class MultiSnakeEnv(gym.Env):
                 if cell in empty_cells:
                     empty_cells.remove(cell)
         for food in self.foods:
-            if self.foods in empty_cells:
-                empty_cells.remove(self.foods)
+            if food in empty_cells:
+                empty_cells.remove(food)
         return empty_cells
 
     def is_collided_wall(self, head):
