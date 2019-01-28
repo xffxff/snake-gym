@@ -37,7 +37,7 @@ class MultiSnakeEnv(gym.Env):
         self.width = 20
         self.hight = 20
 
-        self.action_space = spaces.Tuple([spaces.Discrete(4) for i in range(n_snakes)])
+        self.action_space = [spaces.Discrete(4) for i in range(n_snakes)]
         self.observation_space = spaces.Box(low=0, high=255, shape=(400, 400, 3), dtype=np.uint8)
 
         self.init_snake_num = n_snakes
