@@ -31,18 +31,17 @@ class MultiSnakeEnv(gym.Env):
 
     metadata = {
         'render.modes': ['human', 'rgb_array'],
-        # 'video.frames_per_second' : 50
     }
 
     def __init__(self, n_snakes):
         self.width = 20
         self.hight = 20
 
-        self.action_space = spaces.Box(low=0, high=3, shape=(n_snakes, ), dtype=np.int32)
+        self.action_space = spaces.Tuple([spaces.Discrete(4) for i in range(n_snakes)])
         self.observation_space = spaces.Box(low=0, high=255, shape=(400, 400, 3), dtype=np.uint8)
 
-        self.init_snakes = n_snakes
-        self.n_snakes = n_snakes
+        self.init_snake_num = n_snakes
+        self.snake_alive_num = n_snakes
         
         self.foods = []
         self.viewer = None
@@ -50,11 +49,11 @@ class MultiSnakeEnv(gym.Env):
         self.game_over = False
 
     def reset(self):
-        self.n_snakes = self.init_snakes
+        self.snake_alive_num = self.init_snake_num
         self.game_over = False
-        self.snakes = [Snake(i) for i in range(self.n_snakes)]
+        self.snakes = [Snake(i) for i in range(self.init_snake_num)]
         empty_cells = self.get_empty_cells()
-        for i in range(self.n_snakes):
+        for i in range(self.snake_alive_num):
             empty_cells = self.snakes[i].reset(empty_cells, self.np_random)
         self.foods = [empty_cells[i] for i in self.np_random.choice(len(empty_cells), 3)]
         return self.get_image()
@@ -64,47 +63,46 @@ class MultiSnakeEnv(gym.Env):
         return [seed]
 
     def step(self, action):
-        for i in range(self.n_snakes):
+        for i in range(self.init_snake_num):
             self.snakes[i].step(action[i])
         
         for snake in self.snakes:
-            if snake.head in self.foods:
-                snake.reward += 1.
-                snake.grow()
-                self.foods.remove(snake.head)
-                self.foods = unique_list(self.foods)
-                empty_cells = self.get_empty_cells()
-                if len(self.foods) < 10:
-                    food = empty_cells[self.np_random.choice(len(empty_cells))]
-                    self.foods.append(food) 
+            if not snake.done:
 
-            if self.is_collided_wall(snake.head):
-                snake.reward -= len(snake.body)
-                snake.done = True
-                self.foods.extend(list(snake.body)[1:])
-                self.foods.append(snake.tail)
+                if self.is_collided_wall(snake.head):
+                    snake.reward -= len(snake.body)
+                    snake.done = True
+                    self.foods.extend(list(snake.body)[1:])
+                    self.foods.append(snake.tail)
 
-            if self.bite_others_or_itself(snake):
-                snake.reward -= len(snake.body)
-                snake.done = True
-                self.foods.extend(list(snake.body))
+                elif self.bite_others_or_itself(snake):
+                    snake.reward -= len(snake.body)
+                    snake.done = True
+                    self.foods.extend(list(snake.body)[1:])
+                
+                elif snake.head in self.foods:
+                    snake.reward += 1.
+                    snake.grow()
+                    self.foods.remove(snake.head)
+                    self.foods = unique_list(self.foods)
+                    empty_cells = self.get_empty_cells()
+                    if len(self.foods) < 10:
+                        food = empty_cells[self.np_random.choice(len(empty_cells))]
+                        self.foods.append(food) 
         
         rewards = []
         dones = [] 
         
-        die_snakes = []
+        snake_alive_num = self.init_snake_num
         for snake in self.snakes:   
             rewards.append(snake.reward)
             dones.append(snake.done)
             snake.reward = 0.
             if snake.done:
-                die_snakes.append(snake)
-                self.n_snakes -= 1
+                snake_alive_num -= 1
+                snake.die()
 
-        for die_snake in die_snakes:
-            self.snakes.remove(die_snake)
-        
-        if self.n_snakes == 0:
+        if snake_alive_num == 0:
             self.game_over = True
         return self.get_image(), rewards, dones, {'game_over': self.game_over}
 
@@ -182,24 +180,28 @@ class Snake(object):
         self.done = False
         
     def step(self, action):
-        if not self.is_valid_action(action):
-            action = self.prev_action
-        self.prev_action = action
-        self.prev_head = self.head
-        x, y = self.head
-        if action == SnakeAction.LEFT:
-            self.body.appendleft((x, y - 1))
-        if action == SnakeAction.RIGHT:
-            self.body.appendleft((x, y + 1))
-        if action == SnakeAction.UP:
-            self.body.appendleft((x - 1, y))
-        if action == SnakeAction.DOWN:
-            self.body.appendleft((x + 1, y))
-        self.tail = self.body.pop()
+        if not self.done:
+            if not self.is_valid_action(action):
+                action = self.prev_action
+            self.prev_action = action
+            self.prev_head = self.head
+            x, y = self.head
+            if action == SnakeAction.LEFT:
+                self.body.appendleft((x, y - 1))
+            if action == SnakeAction.RIGHT:
+                self.body.appendleft((x, y + 1))
+            if action == SnakeAction.UP:
+                self.body.appendleft((x - 1, y))
+            if action == SnakeAction.DOWN:
+                self.body.appendleft((x + 1, y))
+            self.tail = self.body.pop()
         return action
     
     def grow(self):
         self.body.append(self.tail)
+    
+    def die(self):
+        self.body.clear()
 
     @property
     def head(self):
