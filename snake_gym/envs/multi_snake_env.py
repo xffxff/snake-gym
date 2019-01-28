@@ -24,6 +24,9 @@ SNAKE_COLOR = [np.array([255, 0, 0], dtype=np.uint8), \
                np.array([255, 0, 255], dtype=np.uint8)]
 
 
+unique_list = lambda x: list(set(x))
+
+
 class MultiSnakeEnv(gym.Env):
 
     metadata = {
@@ -38,14 +41,18 @@ class MultiSnakeEnv(gym.Env):
         self.action_space = spaces.Box(low=0, high=3, shape=(n_snakes, ), dtype=np.int32)
         self.observation_space = spaces.Box(low=0, high=255, shape=(400, 400, 3), dtype=np.uint8)
 
+        self.init_snakes = n_snakes
         self.n_snakes = n_snakes
-        self.snakes = [Snake(i) for i in range(n_snakes)]
+        
         self.foods = []
         self.viewer = None
         self.np_random = np.random
         self.game_over = False
 
     def reset(self):
+        self.n_snakes = self.init_snakes
+        self.game_over = False
+        self.snakes = [Snake(i) for i in range(self.n_snakes)]
         empty_cells = self.get_empty_cells()
         for i in range(self.n_snakes):
             empty_cells = self.snakes[i].reset(empty_cells, self.np_random)
@@ -57,7 +64,6 @@ class MultiSnakeEnv(gym.Env):
         return [seed]
 
     def step(self, action):
-        # assert self.action_space.contains(action), "%r (%s) invalid" % (action, type(action))
         for i in range(self.n_snakes):
             self.snakes[i].step(action[i])
         
@@ -66,26 +72,37 @@ class MultiSnakeEnv(gym.Env):
                 snake.reward += 1.
                 snake.grow()
                 self.foods.remove(snake.head)
+                self.foods = unique_list(self.foods)
                 empty_cells = self.get_empty_cells()
                 if len(self.foods) < 10:
                     food = empty_cells[self.np_random.choice(len(empty_cells))]
                     self.foods.append(food) 
 
-            if self.bite_others_or_itself(snake) or self.is_collided_wall(snake.head):
+            if self.is_collided_wall(snake.head):
                 snake.reward -= len(snake.body)
                 snake.done = True
                 self.foods.extend(list(snake.body)[1:])
                 self.foods.append(snake.tail)
+
+            if self.bite_others_or_itself(snake):
+                snake.reward -= len(snake.body)
+                snake.done = True
+                self.foods.extend(list(snake.body))
         
         rewards = []
-        dones = []
-        for snake in self.snakes:
+        dones = [] 
+        
+        die_snakes = []
+        for snake in self.snakes:   
             rewards.append(snake.reward)
             dones.append(snake.done)
             snake.reward = 0.
             if snake.done:
-                self.snakes.remove(snake)
+                die_snakes.append(snake)
                 self.n_snakes -= 1
+
+        for die_snake in die_snakes:
+            self.snakes.remove(die_snake)
         
         if self.n_snakes == 0:
             self.game_over = True
@@ -94,12 +111,20 @@ class MultiSnakeEnv(gym.Env):
     def bite_others_or_itself(self, this_snake):
         snakes = self.snakes.copy()
         other_snakes = snakes.remove(this_snake)
+        for snake in snakes:
+            if this_snake.head == snake.prev_head and self.is_opposite_movement(this_snake, snake):
+                return True
         all_body_cells = []
         for snake in snakes:
             all_body_cells.extend(list(snake.body))
         all_body_cells.extend(list(this_snake.body)[1:])
         return this_snake.head in all_body_cells
 
+    def is_opposite_movement(self, snake1, snake2):
+        return (snake1.prev_action, snake2.prev_action) in [(SnakeAction.LEFT, SnakeAction.RIGHT),\
+                                                            (SnakeAction.RIGHT, SnakeAction.LEFT),\
+                                                            (SnakeAction.UP, SnakeAction.DOWN),\
+                                                            (SnakeAction.DOWN, SnakeAction.UP)]
 
     def get_image(self):
         board_width = 400
@@ -151,6 +176,7 @@ class Snake(object):
         self.body = deque()
         self.color = SNAKE_COLOR[i]
         self.prev_action = None
+        self.prev_head = None
         self.tail = None
         self.reward = 0.
         self.done = False
@@ -159,6 +185,7 @@ class Snake(object):
         if not self.is_valid_action(action):
             action = self.prev_action
         self.prev_action = action
+        self.prev_head = self.head
         x, y = self.head
         if action == SnakeAction.LEFT:
             self.body.appendleft((x, y - 1))
@@ -169,6 +196,7 @@ class Snake(object):
         if action == SnakeAction.DOWN:
             self.body.appendleft((x + 1, y))
         self.tail = self.body.pop()
+        return action
     
     def grow(self):
         self.body.append(self.tail)
