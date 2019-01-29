@@ -16,6 +16,7 @@ class SnakeAction(object):
 
 FOOD_COLOR = np.array([0, 255, 0], dtype=np.uint8)
 SPACE_COLOR = np.array([255,255,255], dtype=np.uint8)
+OPPONENT_COLOR = np.array([0, 0, 0], dtype=np.uint8)
 
 SNAKE_COLOR = [np.array([255, 0, 0], dtype=np.uint8), \
                np.array([0, 0, 255], dtype=np.uint8), \
@@ -23,7 +24,7 @@ SNAKE_COLOR = [np.array([255, 0, 0], dtype=np.uint8), \
                np.array([0, 255, 255], dtype=np.uint8), \
                np.array([255, 0, 255], dtype=np.uint8)]
 
-OPPONENT_COLOR = np.array([0, 0, 0], dtype=np.uint8)
+
 
 unique_list = lambda x: list(set(x))
 
@@ -34,26 +35,29 @@ class MultiSnakeEnv(gym.Env):
         'render.modes': ['human', 'rgb_array'],
     }
 
-    def __init__(self, n_snakes):
+    def __init__(self):
         self.width = 20
         self.hight = 20
+        default_n_snakes = 2
+        default_n_foods = 3
 
-        self.action_space = [spaces.Discrete(4) for i in range(n_snakes)]
-        self.observation_space = [spaces.Box(low=0, high=255, shape=(400, 400, 3), dtype=np.uint8) for i in range(n_snakes)]
+        self.action_space = [spaces.Discrete(4) for i in range(default_n_snakes)]
+        self.observation_space = [spaces.Box(low=0, high=255, shape=(400, 400, 3), dtype=np.uint8) \
+                                                                            for i in range(default_n_snakes)]
 
-        self.init_snake_num = n_snakes
-        self.snake_alive_num = n_snakes
+        self.n_snakes = default_n_snakes
+        self.snake_alive_num = default_n_snakes
+        self.n_foods = default_n_foods
         
         self.foods = []
         self.viewer = None
         self.np_random = np.random
         self.game_over = False
-        self.n_foods = 1
 
     def reset(self):
-        self.snake_alive_num = self.init_snake_num
+        self.snake_alive_num = self.n_snakes
         self.game_over = False
-        self.snakes = [Snake(i) for i in range(self.init_snake_num)]
+        self.snakes = [Snake(i) for i in range(self.n_snakes)]
         empty_cells = self.get_empty_cells()
         for i in range(self.snake_alive_num):
             empty_cells = self.snakes[i].reset(empty_cells, self.np_random)
@@ -65,18 +69,16 @@ class MultiSnakeEnv(gym.Env):
         return [seed]
 
     def step(self, action):
-        for i in range(self.init_snake_num):
+        for i in range(self.n_snakes):
             self.snakes[i].step(action[i])
         
         for snake in self.snakes:
             if not snake.done:
-
                 if self.is_collided_wall(snake.head):
                     snake.reward -= 1
                     snake.done = True
                     self.foods.extend(list(snake.body)[1:])
-                    self.foods.append(snake.tail)
-
+                
                 elif self.bite_others_or_itself(snake):
                     snake.reward -= 1
                     snake.done = True
@@ -95,7 +97,7 @@ class MultiSnakeEnv(gym.Env):
         rewards = []
         dones = [] 
         
-        snake_alive_num = self.init_snake_num
+        snake_alive_num = self.n_snakes
         for snake in self.snakes:   
             rewards.append(snake.reward)
             dones.append(snake.done)
@@ -107,7 +109,7 @@ class MultiSnakeEnv(gym.Env):
         if snake_alive_num == 0:
             self.game_over = True
         return self.get_observations(), rewards, dones, {'game_over': self.game_over}
-
+    
     def bite_others_or_itself(self, this_snake):
         snakes = self.snakes.copy()
         other_snakes = snakes.remove(this_snake)
