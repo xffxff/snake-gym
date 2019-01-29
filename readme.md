@@ -27,11 +27,11 @@ while True:
 import gym
 import snake_gym
 
-env = gym.make('MultiSnake-2-v0')
+env = gym.make('MultiSnake-v0')
+env.n_snakes = 2 #set the number of snakes
 obs = env.reset()
 while True:
     act = env.action_space.sample() 
     obs, rew, done, info = env.step(act)
     env.render()
 ```
-You can also use `gym.make('MultiSnake-3-v0')` and `gym.make('MultiSnake-4-v0')` to change the number of snakes.
