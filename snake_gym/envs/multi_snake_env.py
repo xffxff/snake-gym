@@ -102,11 +102,13 @@ class MultiSnakeEnv(gym.Env):
         
         rewards = []
         dones = [] 
+        steps = []
         
         snake_alive_num = self.n_snakes
         for snake in self.snakes:   
             rewards.append(snake.reward)
             dones.append(snake.done)
+            steps.append(snake.n_steps)
             snake.reward = 0.
             if snake.done:
                 snake_alive_num -= 1
@@ -114,7 +116,7 @@ class MultiSnakeEnv(gym.Env):
 
         if snake_alive_num == 0:
             self.game_over = True
-        return self.get_observations(), rewards, dones, {'game_over': self.game_over}
+        return self.get_observations(), rewards, dones, {'game_over': self.game_over, 'steps': steps}
     
     def bite_others_or_itself(self, this_snake):
         snakes = self.snakes.copy()
@@ -209,6 +211,7 @@ class Snake(object):
         self.tail = None
         self.reward = 0.
         self.done = False
+        self.n_steps = 0
         
     def step(self, action):
         if not self.done:
@@ -226,6 +229,7 @@ class Snake(object):
             if action == SnakeAction.DOWN:
                 self.body.appendleft((x + 1, y))
             self.tail = self.body.pop()
+            self.n_steps += 1
         return action
     
     def grow(self):
