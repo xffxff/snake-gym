@@ -53,6 +53,12 @@ class MultiSnakeEnv(gym.Env):
         self.viewer = None
         self.np_random = np.random
         self.game_over = False
+    
+    def set_foods(self, n):
+        self.n_foods = n
+    
+    def set_snakes(self, n):
+        self.n_snakes = n
 
     def reset(self):
         self.snake_alive_num = self.n_snakes
