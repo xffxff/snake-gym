@@ -41,9 +41,9 @@ class MultiSnakeEnv(gym.Env):
         default_n_snakes = 2
         default_n_foods = 3
 
-        self.action_space = [spaces.Discrete(4) for i in range(default_n_snakes)]
-        self.observation_space = [spaces.Box(low=0, high=255, shape=(400, 400, 3), dtype=np.uint8) \
-                                                                            for i in range(default_n_snakes)]
+        self.action_space = spaces.Tuple([spaces.Discrete(4) for i in range(default_n_snakes)])
+        self.observation_space = spaces.Tuple([spaces.Box(low=0, high=255, shape=(400, 400, 3), dtype=np.uint8) \
+                                                                            for i in range(default_n_snakes)])
 
         self.n_snakes = default_n_snakes
         self.snake_alive_num = default_n_snakes
