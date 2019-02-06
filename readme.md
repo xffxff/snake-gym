@@ -12,7 +12,7 @@ pip install -e .
 import gym
 import snake_gym
 
-env = gym.make('Snake-v0')
+env = gym.make('Snake-rgb-v0')
 obs = env.reset()
 while True:
     act = env.action_space.sample()
