@@ -34,17 +34,25 @@ class SnakeEnv(gym.Env):
         self.height = 20
 
         self.action_space = spaces.Discrete(4)
-        self.observation_space = spaces.Box(low=0, high=255, shape=(400, 400, 3), dtype=np.uint8)
+
+        if observation_mode == 'rgb':
+            self.observation_space = spaces.Box(low=0, high=255, shape=(400, 400, 3), dtype=np.uint8)
+        else:
+            self.observation_space = spaces.Box(low=0., high=2., shape=(20, 20, 1), dtype=np.float32)
 
         self.snake = Snake()
-        self.food = None
+        self.foods = []
+        self.n_foods = 1
         self.viewer = None
         self.np_random = np.random
+
+    def set_foods(self, n):
+        self.n_foods = n
 
     def reset(self):
         empty_cells = self.get_empty_cells()
         empty_cells = self.snake.init(empty_cells, self.np_random)
-        self.food = empty_cells[self.np_random.choice(len(empty_cells))]
+        self.foods = [empty_cells[i] for i in self.np_random.choice(len(empty_cells), self.n_foods)]
         return self.get_observation()
 
     def seed(self, seed=None):
@@ -55,12 +63,16 @@ class SnakeEnv(gym.Env):
         assert self.action_space.contains(action), "%r (%s) invalid" % (action, type(action))
 
         snake_tail = self.snake.step(action)
-            
-        if self.snake.head == self.food:
+        
+        self.snake.reward = 0.
+
+        if self.snake.head in self.foods:
             self.snake.reward += 1.
             self.snake.body.append(snake_tail)
+            self.foods.remove(self.snake.head)
             empty_cells = self.get_empty_cells()
-            self.food = empty_cells[self.np_random.choice(len(empty_cells))]
+            food = empty_cells[self.np_random.choice(len(empty_cells))]
+            self.foods.append(food)
         
         #snake collided wall
         if self.is_collided_wall(self.snake.head):
@@ -82,13 +94,13 @@ class SnakeEnv(gym.Env):
 
             for x, y in self.snake.body:
                 try:
-                    observation[x][y] = 1
+                    observation[x][y] = 1.
                 except:
                     pass
             
-            if self.food:
-                x, y = self.food
-                observation[x][y] = 2
+            for food in self.foods:
+                x, y = food
+                observation[x][y] = 2.
             return observation[:, :, None]
 
     def get_image(self):
@@ -100,8 +112,8 @@ class SnakeEnv(gym.Env):
         for x, y in self.snake.body:
             board.fill_cell((x*cell_size, y*cell_size), cell_size, BoardColor.BODY_COLOR)
 
-        if self.food:
-            x, y = self.food
+        for food in self.foods:
+            x, y = food
             board.fill_cell((x*cell_size, y*cell_size), cell_size, BoardColor.FOOD_COLOR)
         return board.board
 
@@ -110,8 +122,9 @@ class SnakeEnv(gym.Env):
         for cell in self.snake.body:
             if cell in empty_cells:
                 empty_cells.remove(cell)
-        if self.food in empty_cells:
-            empty_cells.remove(self.food)
+        for food in self.foods:
+            if food in empty_cells:
+                empty_cells.remove(food)
         return empty_cells
 
     def is_collided_wall(self, head):
