@@ -30,15 +30,15 @@ class SnakeEnv(gym.Env):
 
     def __init__(self, observation_mode=None):
         self.observation_mode = observation_mode
-        self.width = 20
-        self.height = 20
+        self.width = 10
+        self.height = 10
 
         self.action_space = spaces.Discrete(4)
 
         if observation_mode == 'rgb':
-            self.observation_space = spaces.Box(low=0, high=255, shape=(400, 400, 3), dtype=np.uint8)
+            self.observation_space = spaces.Box(low=0, high=255, shape=(self.width * 20, self.height * 20, 3), dtype=np.uint8)
         else:
-            self.observation_space = spaces.Box(low=0., high=2., shape=(20, 20, 1), dtype=np.float32)
+            self.observation_space = spaces.Box(low=0, high=2, shape=(self.width, self.height, 1), dtype=np.uint8)
 
         self.snake = Snake()
         self.foods = []
@@ -90,23 +90,23 @@ class SnakeEnv(gym.Env):
         if self.observation_mode == 'rgb':
             return self.get_image()
         else:
-            observation = np.zeros((self.width, self.height), dtype=np.float32)
+            observation = np.zeros((self.width, self.height), dtype=np.uint8)
 
             for x, y in self.snake.body:
                 try:
-                    observation[x][y] = 1.
+                    observation[x][y] = 100
                 except:
                     pass
             
             for food in self.foods:
                 x, y = food
-                observation[x][y] = 2.
+                observation[x][y] = 200
             return observation[:, :, None]
 
     def get_image(self):
-        board_width = 400
-        board_height = 400
-        cell_size = int(board_width / self.width)
+        board_width = 20 * self.width
+        board_height = 20 * self.height
+        cell_size = 20
 
         board = Board(board_height, board_width)
         for x, y in self.snake.body:
@@ -129,7 +129,7 @@ class SnakeEnv(gym.Env):
 
     def is_collided_wall(self, head):
         x, y = head
-        if x < 0 or x > 19 or y < 0 or y > 19:
+        if x < 0 or x > (self.width - 1) or y < 0 or y > (self.height - 1):
             return True
         return False
 
