@@ -36,14 +36,18 @@ class MultiSnakeEnv(gym.Env):
     }
 
     def __init__(self):
-        self.width = 20
-        self.hight = 20
+        self.width = 15
+        self.height = 15
+        self.cell_size = 10
+        self.board_width = self.width * self.cell_size
+        self.board_height = self.height * self.cell_size
         default_n_snakes = 2
         default_n_foods = 3
 
         self.action_space = spaces.Tuple([spaces.Discrete(4) for i in range(default_n_snakes)])
-        self.observation_space = spaces.Tuple([spaces.Box(low=0, high=255, shape=(400, 400, 3), dtype=np.uint8) \
-                                                                            for i in range(default_n_snakes)])
+        self.observation_space = spaces.Tuple([spaces.Box(low=0, high=255, 
+                            shape=(self.board_width, self.board_height, 3), dtype=np.uint8) 
+                            for i in range(default_n_snakes)])
 
         self.n_snakes = default_n_snakes
         self.snake_alive_num = default_n_snakes
@@ -65,7 +69,7 @@ class MultiSnakeEnv(gym.Env):
         self.game_over = False
         self.snakes = [Snake(i) for i in range(self.n_snakes)]
         empty_cells = self.get_empty_cells()
-        for i in range(self.snake_alive_num):
+        for i in range(self.n_snakes):
             empty_cells = self.snakes[i].reset(empty_cells, self.np_random)
         self.foods = [empty_cells[i] for i in self.np_random.choice(len(empty_cells), self.n_foods)]
         return self.get_observations()
@@ -137,43 +141,38 @@ class MultiSnakeEnv(gym.Env):
                                                             (SnakeAction.DOWN, SnakeAction.UP)]
 
     def get_image(self):
-        board_width = 400
-        board_height = 400
-        cell_size = int(board_width / self.width)
-
-        board = Board(board_height, board_width)
+        board = Board(self.board_height, self.board_width)
         for snake in self.snakes:
             for x, y in snake.body:
-                board.fill_cell((x*cell_size, y*cell_size), cell_size, snake.color)
+                board.fill_cell((x*self.cell_size, y*self.cell_size), self.cell_size, snake.color)
         
         for food in self.foods:
             x, y = food
-            board.fill_cell((x*cell_size, y*cell_size), cell_size, FOOD_COLOR)
+            board.fill_cell((x*self.cell_size, y*self.cell_size), self.cell_size, FOOD_COLOR)
         return board.board
 
     def get_observations(self):
-        board_width = 400
-        board_height = 400
-        cell_size = int(board_width / self.width)
-
         observations = []
         for snake in self.snakes:
-            board = Board(board_height, board_width)
-            other_snakes = self.snakes.copy()
-            other_snakes.remove(snake)
-            for x, y in snake.body:
-                board.fill_cell((x*cell_size, y*cell_size), cell_size, SNAKE_COLOR[0])
-            for other_snake in other_snakes:
-                for x, y in other_snake.body:
-                    board.fill_cell((x*cell_size, y*cell_size), cell_size, OPPONENT_COLOR)
-            for food in self.foods:
-                x, y = food
-                board.fill_cell((x*cell_size, y*cell_size), cell_size, FOOD_COLOR)
-            observations.append(board.board)
+            if snake.done == True:
+                observations.append(np.zeros((self.board_width, self.board_height, 3), dtype=np.uint8))
+            else:
+                board = Board(self.board_height, self.board_width)
+                other_snakes = self.snakes.copy()
+                other_snakes.remove(snake)
+                for x, y in snake.body:
+                    board.fill_cell((x*self.cell_size, y*self.cell_size), self.cell_size, SNAKE_COLOR[0])
+                for other_snake in other_snakes:
+                    for x, y in other_snake.body:
+                        board.fill_cell((x*self.cell_size, y*self.cell_size), self.cell_size, OPPONENT_COLOR)
+                for food in self.foods:
+                    x, y = food
+                    board.fill_cell((x*self.cell_size, y*self.cell_size), self.cell_size, FOOD_COLOR)
+                observations.append(board.board)
         return observations
 
     def get_empty_cells(self):
-        empty_cells = [(x, y) for x in range(self.width) for y in range(self.hight)]
+        empty_cells = [(x, y) for x in range(self.width) for y in range(self.height)]
         for snake in self.snakes:
             for cell in snake.body:
                 if cell in empty_cells:
@@ -185,7 +184,7 @@ class MultiSnakeEnv(gym.Env):
 
     def is_collided_wall(self, head):
         x, y = head
-        if x < 0 or x > 19 or y < 0 or y > 19:
+        if x < 0 or x > (self.width - 1) or y < 0 or y > (self.height - 1):
             return True
         return False
 
