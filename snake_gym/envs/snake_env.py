@@ -50,9 +50,11 @@ class SnakeEnv(gym.Env):
         self.n_foods = n
 
     def reset(self):
+        self.snake.body.clear()
+        self.foods.clear()
         empty_cells = self.get_empty_cells()
         empty_cells = self.snake.init(empty_cells, self.np_random)
-        self.foods = [empty_cells[i] for i in self.np_random.choice(len(empty_cells), self.n_foods)]
+        self.foods = [empty_cells[i] for i in self.np_random.choice(len(empty_cells), self.n_foods, replace=False)]
         return self.get_observation()
 
     def seed(self, seed=None):
