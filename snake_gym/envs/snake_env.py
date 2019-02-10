@@ -70,7 +70,7 @@ class SnakeEnv(gym.Env):
         self.snake.reward = 0.
 
         if self.energy_consum:
-            self.snake.reward -= 0.1
+            self.snake.reward -= 0.01
 
         if self.snake.head in self.foods:
             self.snake.reward += 1.
