@@ -28,8 +28,9 @@ class SnakeEnv(gym.Env):
         # 'video.frames_per_second' : 50
     }
 
-    def __init__(self, observation_mode=None):
+    def __init__(self, observation_mode=None, energy_consum=False):
         self.observation_mode = observation_mode
+        self.energy_consum = energy_consum
         self.width = 10
         self.height = 10
 
@@ -68,6 +69,9 @@ class SnakeEnv(gym.Env):
         
         self.snake.reward = 0.
 
+        if self.energy_consum:
+            self.snake.reward -= 0.1
+
         if self.snake.head in self.foods:
             self.snake.reward += 1.
             self.snake.body.append(snake_tail)
@@ -85,6 +89,8 @@ class SnakeEnv(gym.Env):
         if self.snake.head in list(self.snake.body)[1:]:
             self.snake.reward -= 1.
             self.snake.done = True
+        
+        self.snake.reward = np.clip(self.snake.reward, -1., 1.)
 
         return self.get_observation(), self.snake.reward, self.snake.done, {}
 
